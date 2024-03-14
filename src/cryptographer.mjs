@@ -133,8 +133,19 @@ export default class Cryptographer {
     const inpayCertificate = this._readCredentialsFile('inpay_certificate.crt');
     const inpayCert = pki.certificateFromPem(inpayCertificate);
 
-    // Decrypt the signature using InPay's public key and encode in Base64
-    const decryptedSignature = pki.rsa.decrypt(signedP7.rawCapture.signature, inpayCert.publicKey, true, false);
+    // Extract the message certificate from the PKCS7 object
+    const messageCert = signedP7.certificates[0];
+    // Create a CA store with InPay's certificate (treated as a root certificate)
+    const caStore = pki.createCaStore([inpayCertificate]);
+  
+    // Verify the certificate chain of the message certificate against the CA store (InPay's certificate)
+    pki.verifyCertificateChain(caStore, [messageCert], (chainVerified, depth) => {
+      console.log('Certificate chain verified:', chainVerified);
+      return chainVerified;
+    });
+
+    // Decrypt the signature using the public key from the message certificate and encode in Base64
+    const decryptedSignature = pki.rsa.decrypt(signedP7.rawCapture.signature, messageCert.publicKey, true, false);
     const decryptedEncodedSignature = forge.util.encode64(decryptedSignature);
 
     // Extract authenticated attributes field from the PKCS7 object
@@ -152,7 +163,7 @@ export default class Cryptographer {
 
     // Log the decrypted message and result of the verification
     console.log('Decrypted message:', message);
-    console.log('Verified:', verified);
+    console.log('Signature verified:', verified);
   }
 
   // Calculate the digest of the authenticated attributes and the message based per RFC 2315
